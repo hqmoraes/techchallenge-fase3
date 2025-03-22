@@ -1,0 +1,13 @@
+# kubernetes-infra/kubernetes/config/database-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: database-config
+  namespace: fastfood
+data:
+  DYNAMODB_ENDPOINT: "https://dynamodb.us-east-1.amazonaws.com"
+  CLIENTS_TABLE: "dev-FastFoodClients"
+  PRODUCTS_TABLE: "dev-FastFoodProducts"
+  CATEGORIES_TABLE: "dev-FastFoodCategories" 
+  ORDERS_TABLE: "dev-FastFoodOrders"
+  PAYMENTS_TABLE: "dev-FastFoodPayments"

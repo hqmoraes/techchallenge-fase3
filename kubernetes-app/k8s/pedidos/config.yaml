@@ -1,0 +1,12 @@
+# kubernetes-app/k8s/pedidos/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pedidos-config
+  namespace: pedidos
+data:
+  application.properties: |
+    server.port=8080
+    spring.application.name=pedidos-service
+    pedido.timeout=300
+    pedido.fila.check.interval=15

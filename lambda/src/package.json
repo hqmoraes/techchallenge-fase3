@@ -1,0 +1,10 @@
+{
+  "name": "fastfood-auth-lambda",
+  "version": "1.0.0",
+  "description": "Função de autenticação para o sistema Fast Food",
+  "main": "index.js",
+  "dependencies": {
+    "aws-sdk": "^2.1048.0",
+    "jsonwebtoken": "^8.5.1"
+  }
+}

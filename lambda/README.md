@@ -1,0 +1,1 @@
+# Lambda de Autenticação - Fast Food\n\nFunção Lambda para autenticação de clientes por CPF no sistema de Fast Food.\n\n## Requisitos\n\n- Node.js 22\n- AWS CLI configurado\n- Terraform\n\n## Instalação\n\n\n\n## Testes\n\n

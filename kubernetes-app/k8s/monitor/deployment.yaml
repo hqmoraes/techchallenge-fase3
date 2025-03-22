@@ -1,0 +1,36 @@
+# kubernetes-app/k8s/monitor/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monitor
+  namespace: monitor
+  labels:
+    app: monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: monitor
+  template:
+    metadata:
+      labels:
+        app: monitor
+    spec:
+      containers:
+      - name: monitor
+        image: fastfood/monitor:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        env:
+        - name: PEDIDOS_SERVICE_URL
+          value: "http://pedidos.pedidos.svc.cluster.local"
+        - name: PAGAMENTOS_SERVICE_URL
+          value: "http://pagamentos.pagamentos.svc.cluster.local"
+        resources:
+          limits:
+            cpu: "300m"
+            memory: "384Mi"
+          requests:
+            cpu: "100m"
+            memory: "128Mi"

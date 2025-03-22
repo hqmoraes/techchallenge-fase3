@@ -1,0 +1,19 @@
+# kubernetes-infra/kubernetes/config/app-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: fastfood
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  API_VERSION: "v1"
+  AWS_REGION: "us-east-1"
+  AUTH_API_URL: "https://7y2syzkjpf.execute-api.us-east-1.amazonaws.com/dev/auth"
+  CORS_ALLOWED_ORIGINS: "*"
+  PEDIDO_STATUS_INICIAL: "Recebido"
+  PEDIDO_STATUS_PREPARACAO: "Em preparação"
+  PEDIDO_STATUS_PRONTO: "Pronto"
+  PEDIDO_STATUS_FINALIZADO: "Finalizado"
+  HEALTH_CHECK_INTERVAL: "30000"
+  LOG_LEVEL: "info"

@@ -1,0 +1,30 @@
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    resources:
+      requests:
+        memory: 512Mi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+
+grafana:
+  adminPassword: "fastfood2025"
+  dashboards:
+    default:
+      fastfood-dashboard:
+        json: |
+          {
+            "title": "FastFood Dashboard",
+            "panels": [
+              {
+                "title": "API Requests",
+                "type": "graph",
+                "datasource": "Prometheus"
+              }
+            ]
+          }

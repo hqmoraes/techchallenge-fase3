@@ -1,0 +1,1 @@
+# Database Infrastructure - Fast Food\n\nInfraestrutura de banco de dados para o sistema Fast Food usando DynamoDB.\n\n## Requisitos\n\n- Terraform\n- AWS CLI configurado\n- Node.js 22\n\n## Implantação\n\n

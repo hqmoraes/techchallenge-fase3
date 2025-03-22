@@ -1,0 +1,43 @@
+# Deployment com suporte a IRSA
+# Tech Challenge Fast Food - Fase 3
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fastfood-api
+  namespace: fastfood
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fastfood-api
+  template:
+    metadata:
+      labels:
+        app: fastfood-api
+    spec:
+      serviceAccountName: fastfood-app
+      containers:
+      - name: fastfood-api
+        image: ${ECR_REPO}/fastfood-api:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: DATABASE_SECRET_ARN
+          value: "${DATABASE_SECRET_ARN}"
+        - name: API_SECRET_ARN
+          value: "${API_SECRET_ARN}"
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 30

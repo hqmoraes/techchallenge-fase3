@@ -1,0 +1,49 @@
+# kubernetes-app/k8s/common/network-policies.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pedidos-network-policy
+  namespace: pedidos
+spec:
+  podSelector:
+    matchLabels:
+      app: pedidos
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitor
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: pagamentos
+    ports:
+    - protocol: TCP
+      port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pagamentos-network-policy
+  namespace: pagamentos
+spec:
+  podSelector:
+    matchLabels:
+      app: pagamentos
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: pedidos
+    ports:
+    - protocol: TCP
+      port: 8080

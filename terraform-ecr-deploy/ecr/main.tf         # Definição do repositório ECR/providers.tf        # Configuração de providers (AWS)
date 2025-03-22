@@ -1,0 +1,50 @@
+resource "aws_ecr_repository" "my_repository" {
+  name                 = var.repository_name
+  image_tag_mutability = "MUTABLE"
+  lifecycle_policy {
+    rule {
+      rule_priority = 1
+      description   = "Expire images older than 30 days"
+      selection {
+        tag_status = "ANY"
+        count_type = "sinceImagePushed"
+        count_unit = "days"
+        count_number = 30
+      }
+      action {
+        type = "expire"
+      }
+    }
+  }
+}
+
+resource "aws_ecr_repository_policy" "my_repository_policy" {
+  repository = aws_ecr_repository.my_repository.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "codebuild.amazonaws.com"
+        }
+        Action = "ecr:BatchGetImage"
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "codebuild.amazonaws.com"
+        }
+        Action = "ecr:BatchCheckLayerAvailability"
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "codebuild.amazonaws.com"
+        }
+        Action = "ecr:PutImage"
+      }
+    ]
+  })
+}

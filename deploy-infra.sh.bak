@@ -1,0 +1,161 @@
+#!/bin/bash
+# deploy-infra.sh
+# Script para execução do terraform plan e apply em ordem correta
+
+set -e  # Encerrar script em caso de erro
+
+# Definir cores para melhor visualização
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Diretórios de infraestrutura em ordem de dependência
+INFRA_DIRS=(
+  "database-infra/terraform"   # Primeiro: DynamoDB e tabelas
+  "lambda/terraform"           # Segundo: Funções Lambda e API Gateway
+  "kubernetes-infra/terraform" # Terceiro: Infraestrutura Kubernetes (opcional)
+)
+
+# Função para executar terraform em um diretório específico
+function run_terraform() {
+  local dir=$1
+  local action=$2
+  
+  echo -e "${YELLOW}=== Executando terraform $action em $dir ===${NC}"
+  
+  # Verificar se o diretório existe
+  if [ ! -d "$dir" ]; then
+    echo -e "${RED}Diretório $dir não encontrado. Pulando...${NC}"
+    return 1
+  fi
+  
+  # Navegar para o diretório
+  cd "$dir"
+  
+  # Inicializar Terraform
+  echo -e "${YELLOW}Inicializando Terraform...${NC}"
+  terraform init
+  
+  # Verificar se o backend S3 está configurado
+  if grep -q "backend \"s3\"" *.tf; then
+    echo -e "${GREEN}Backend S3 configurado.${NC}"
+  else
+    echo -e "${YELLOW}AVISO: Backend S3 não encontrado. Configurando...${NC}"
+    configure_backend "$dir"
+  fi
+  
+  # Executar validação
+  echo -e "${YELLOW}Validando configuração...${NC}"
+  terraform validate
+  
+  # Executar plan ou apply conforme solicitado
+  if [ "$action" == "plan" ]; then
+    echo -e "${YELLOW}Executando terraform plan...${NC}"
+    terraform plan -out=tfplan
+  elif [ "$action" == "apply" ]; then
+    echo -e "${YELLOW}Executando terraform apply...${NC}"
+    if [ -f tfplan ]; then
+      terraform apply tfplan
+    else
+      terraform apply -auto-approve
+    fi
+  fi
+  
+  # Voltar para o diretório raiz do projeto
+  cd - > /dev/null
+  
+  echo -e "${GREEN}=== Terraform $action em $dir concluído com sucesso! ===${NC}"
+}
+
+# Adicione esta função ao deploy-infra.sh
+function configure_backend() {
+  local dir=$1
+  local module_name=$(echo $dir | tr '/' '-')
+  
+  if ! grep -q "backend \"s3\"" *.tf; then
+    echo -e "${YELLOW}Configurando backend S3 automaticamente...${NC}"
+    
+    cat > "backend.tf" << EOL
+terraform {
+  backend "s3" {
+    bucket         = "fiap-techchallenge"
+    key            = "fastfood/$module_name/terraform.tfstate"
+    region         = "us-east-1"
+    encrypt        = true
+    dynamodb_table = "terraform-lock"
+  }
+}
+EOL
+    
+    echo -e "${GREEN}Backend S3 configurado automaticamente.${NC}"
+    
+    # Reinicializar o Terraform com o novo backend
+    terraform init -reconfigure
+  fi
+}
+
+# Função principal para executar operações em todos os diretórios
+function main() {
+  local action=$1
+  
+  if [ "$action" != "plan" ] && [ "$action" != "apply" ]; then
+    echo -e "${RED}Ação inválida. Use 'plan' ou 'apply'.${NC}"
+    exit 1
+  fi
+  
+  # Armazenar diretório inicial
+  INITIAL_DIR=$(pwd)
+  
+  echo -e "${GREEN}=== Iniciando terraform $action em todos os módulos ===${NC}"
+  
+  # Executar terraform na ordem especificada
+  for dir in "${INFRA_DIRS[@]}"; do
+    cd "$INITIAL_DIR"
+    run_terraform "$dir" "$action"
+    
+    # Verificar se a operação foi bem-sucedida
+    if [ $? -ne 0 ]; then
+      echo -e "${RED}Erro ao executar terraform $action em $dir. Abortando.${NC}"
+      exit 1
+    fi
+    
+    if [ "$action" == "plan" ]; then
+      echo -e "${YELLOW}Revise o plano gerado em $dir/tfplan antes de aplicar as alterações.${NC}"
+    fi
+    
+    echo ""
+  done
+  
+  cd "$INITIAL_DIR"
+  
+  if [ "$action" == "plan" ]; then
+    echo -e "${GREEN}=== Todos os planos gerados com sucesso! ===${NC}"
+    echo -e "${YELLOW}Execute '$0 apply' para aplicar as alterações.${NC}"
+  else
+    echo -e "${GREEN}=== Toda a infraestrutura foi provisionada com sucesso! ===${NC}"
+  fi
+}
+
+# Verificar se a AWS CLI está configurada
+if ! command -v aws &> /dev/null; then
+  echo -e "${RED}AWS CLI não encontrada. Por favor, instale e configure.${NC}"
+  exit 1
+fi
+
+# Verificar se o Terraform está instalado
+if ! command -v terraform &> /dev/null; then
+  echo -e "${RED}Terraform não encontrado. Por favor, instale.${NC}"
+  exit 1
+fi
+
+# Mostrar uso se nenhum argumento for fornecido
+if [ $# -eq 0 ]; then
+  echo -e "Uso: $0 [plan|apply]"
+  echo -e "  plan  - Gera planos Terraform para todos os módulos"
+  echo -e "  apply - Aplica os planos Terraform em todos os módulos"
+  exit 1
+fi
+
+# Executar a função principal com o argumento fornecido
+main "$1"

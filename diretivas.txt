@@ -1,0 +1,699 @@
+hqmoraes: @workspace Por favor, considerando as instruções no arquivo em anexo, precisamos refatorar o código da aplicação que está na pasta arquivos-fase2, para que seja segmentada nas pastas database-infra, kubernetes-app, kubernetes-infra e lambda.
+Vamos trabalhar com o node js 22, e apesar de escrevermos a aplicação para funcionar em qualquer nuvem pública, a infraestrutura do projeto será escrita para rodar na AWS.
+Antes de começar a escrever código, para contornarmos a sua limitação na quantidade de código que você pode escrever, por favor, escreva um texto detalhando o seu entendimento do workspace anexado, bem como da aplicação que será refatorada. Antes de codificar, vamos documentar muito bem o que faremos, modularize a documentação em passos que devemos seguir, e se atenha aos detalhes.
+
+Workspace: Coletando informações do workspace# Análise e Plano de Refatoração do Projeto Fast Food
+
+## Entendimento do Workspace
+
+Observando a estrutura do workspace, temos:
+
+1. **Documentação do Projeto**:
+   - Arquivos PDF e TXT com as instruções para a fase 3
+   - Documentos da fase anterior em arquivos-fase2
+
+2. **Código Atual (pasta arquivos-fase2)**:
+   - Configuração Docker (Dockerfile, DockerfileLocal, docker-compose)
+   - Configuração de ambiente (.env)
+   - Configuração de testes (jest.config.js)
+   - Inicialização do banco de dados (init-db.js)
+   - Arquivos de projeto (package.json)
+
+3. **Estrutura Alvo da Refatoração**:
+   - database-infra: Infraestrutura do banco de dados (Terraform)
+   - kubernetes-app: Código da aplicação que rodará no Kubernetes
+   - kubernetes-infra: Infraestrutura Kubernetes (Terraform)
+   - lambda: Funções serverless para autenticação
+
+## Requisitos de Refatoração
+
+1. **Autenticação Serverless**:
+   - API Gateway para interceptar requisições
+   - Lambda function para autenticar via CPF
+
+2. **CI/CD e Repositórios**:
+   - Repositórios separados para cada componente
+   - Proteção de branches main/master
+   - Implementação de CI/CD via GitHub Actions
+
+3. **Banco de Dados**:
+   - Melhorar a estrutura do banco escolhido
+   - Documentar modelo de dados
+   - Justificar escolha do banco
+
+4. **Infraestrutura Cloud (AWS)**:
+   - Funções serverless (Lambda)
+   - Banco de dados gerenciável (RDS)
+   - Sistema de autenticação (Cognito)
+   - Infraestrutura como código (Terraform)
+
+## Plano de Refatoração
+
+### Etapa 1: Análise do Código Atual
+- Entender a arquitetura atual da aplicação
+- Identificar componentes e responsabilidades
+- Mapear dependências entre módulos
+
+### Etapa 2: Separação dos Repositórios
+1. **Repositório Lambda**
+   - Função de autenticação por CPF
+   - Integração com API Gateway
+   - Configuração de permissões
+
+2. **Repositório Kubernetes Infra**
+   - Definição dos clusters Kubernetes via Terraform
+   - Configuração de rede e segurança
+   - Definição de namespaces e recursos
+
+3. **Repositório Database Infra**
+   - Configuração do RDS via Terraform
+   - Definição de backups e manutenção
+   - Configuração de segurança
+
+4. **Repositório da Aplicação**
+   - Core da aplicação de fast food
+   - Manifestos Kubernetes (deployments, services)
+   - Componentes divididos por domínio (pedidos, produtos, clientes)
+
+### Etapa 3: Arquitetura da Nova Solução
+- Definir fluxos de integração entre componentes
+- Estabelecer padrões de comunicação (APIs, eventos)
+- Documentar arquitetura e decisões técnicas
+
+### Etapa 4: Implementação de CI/CD
+- Configurar GitHub Actions para cada repositório
+- Definir estratégia de branches e releases
+- Implementar pipelines de teste, build e deployment
+
+### Etapa 5: Migração e Testes
+- Mover código para os novos repositórios
+- Adaptar código para nova arquitetura
+- Implementar e executar testes de integração
+
+## Próximos Passos
+
+1. Examinar detalhadamente o código existente na pasta arquivos-fase2
+2. Criar esqueleto inicial de cada componente
+3. Implementar a infraestrutura base com Terraform
+4. Adaptar o código da aplicação para o novo modelo
+5. Configurar autenticação serverless com Lambda e API Gateway
+
+Estes passos nos permitirão organizar o trabalho de refatoração de forma estruturada, mantendo o controle sobre as mudanças e garantindo que todos os requisitos sejam atendidos.
+
+Vamos começar analisando detalhadamente o código existente antes de iniciar a implementação.
+
+hqmoraes: @workspace Perfeito! Podemos começar então, com a análise do código existe e com a criação do esqueleto inicial de cada componente. Por favor, considere a estrutura de pastas existente a e partir delas, sugira as subpastas necessárias para organizar o código da melhor maneira possível, criar uma esteira CI/CD com base em github actions e microserviços. Uma observação importante, é que utilizaremos DynamoDB como banco de dados para as aplicações.
+
+Workspace: Coletando informações do workspace# Análise Detalhada e Estrutura de Pastas para Refatoração
+
+Após analisar o código existente na pasta arquivos-fase2, identifiquei que estamos lidando com uma aplicação de lanchonete baseada em Node.js que utiliza DynamoDB para persistência e segue uma arquitetura limpa. O sistema gerencia clientes, produtos, categorias, pedidos e pagamentos através de APIs REST.
+
+## Estrutura de Repositórios
+
+De acordo com os requisitos, vamos refatorar o projeto em quatro repositórios diferentes:
+
+### 1. Lambda Repository (lambda/)
+
+```
+lambda/
+├── src/
+│   ├── functions/
+│   │   └── auth/
+│   │       ├── index.js                # Ponto de entrada da função Lambda
+│   │       ├── auth-service.js         # Serviço de autenticação
+│   │       └── cpf-validator.js        # Utilitário para validação de CPF
+│   ├── utils/
+│   │   ├── dynamo-client.js           # Cliente para conexão com DynamoDB
+│   │   └── response-formatter.js       # Formatador de respostas para API Gateway
+│   └── config/
+│       └── env.js                      # Configurações de ambiente
+├── tests/
+│   ├── unit/
+│   │   └── auth.test.js               # Testes unitários
+│   └── integration/
+│       └── auth.test.js               # Testes de integração
+├── .github/
+│   └── workflows/
+│       ├── test.yml                    # Pipeline de testes
+│       └── deploy.yml                  # Pipeline de deploy
+├── terraform/
+│   ├── main.tf                         # Definição principal do Terraform
+│   ├── variables.tf                    # Variáveis do Terraform
+│   ├── outputs.tf                      # Outputs do Terraform
+│   └── lambda.tf                       # Configuração específica da Lambda
+├── package.json
+├── .gitignore
+└── README.md
+```
+
+### 2. Database Infrastructure Repository (database-infra/)
+
+```
+database-infra/
+├── terraform/
+│   ├── main.tf                         # Definição principal do Terraform
+│   ├── variables.tf                    # Variáveis do Terraform
+│   ├── outputs.tf                      # Outputs do Terraform
+│   ├── dynamo.tf                       # Configuração do DynamoDB
+│   ├── iam.tf                          # Políticas IAM para acesso ao banco
+│   └── provider.tf                     # Configuração do provedor AWS
+├── scripts/
+│   ├── init-db.js                      # Script para inicializar tabelas do DynamoDB
+│   └── migration/                      # Scripts de migração de dados
+│       └── v1-to-v2.js
+├── docs/
+│   ├── schema/                         # Documentação do schema do banco
+│   │   ├── clients.md
+│   │   ├── products.md
+│   │   ├── orders.md
+│   │   └── payments.md
+│   └── justification.md               # Justificativa da escolha do banco
+├── .github/
+│   └── workflows/
+│       ├── validate.yml                # Validação da infra
+│       └── deploy.yml                  # Deploy da infra
+└── README.md
+```
+
+### 3. Kubernetes Infrastructure Repository (kubernetes-infra/)
+
+```
+kubernetes-infra/
+├── terraform/
+│   ├── main.tf                         # Definição principal do Terraform
+│   ├── variables.tf                    # Variáveis do Terraform
+│   ├── outputs.tf                      # Outputs do Terraform
+│   ├── eks.tf                          # Configuração do EKS
+│   ├── vpc.tf                          # Configuração da VPC
+│   ├── node-groups.tf                  # Configuração dos node groups
+│   ├── iam.tf                          # Políticas IAM para EKS
+│   └── provider.tf                     # Configuração do provedor AWS
+├── kubernetes/
+│   ├── namespaces/
+│   │   ├── production.yaml
+│   │   └── staging.yaml
+│   ├── network/
+│   │   ├── ingress.yaml
+│   │   └── service-mesh.yaml
+│   ├── monitoring/
+│   │   ├── prometheus.yaml
+│   │   └── grafana.yaml
+│   └── security/
+│       ├── network-policies.yaml
+│       └── pod-security-policies.yaml
+├── .github/
+│   └── workflows/
+│       ├── terraform-validate.yml     # Validação do Terraform
+│       └── terraform-deploy.yml       # Deploy da infraestrutura
+└── README.md
+```
+
+### 4. Kubernetes Application Repository (kubernetes-app/)
+
+```
+kubernetes-app/
+├── src/
+│   ├── domain/
+│   │   ├── entities/
+│   │   │   ├── cliente.js
+│   │   │   ├── produto.js
+│   │   │   ├── categoria.js
+│   │   │   ├── pedido.js
+│   │   │   └── pagamento.js
+│   │   └── services/
+│   │       ├── cliente-service.js
+│   │       ├── produto-service.js
+│   │       ├── categoria-service.js
+│   │       ├── pedido-service.js
+│   │       └── pagamento-service.js
+│   ├── application/
+│   │   ├── use-cases/
+│   │   │   ├── cliente/
+│   │   │   ├── produto/
+│   │   │   ├── categoria/
+│   │   │   ├── pedido/
+│   │   │   └── pagamento/
+│   │   └── dto/
+│   │       ├── cliente-dto.js
+│   │       ├── produto-dto.js
+│   │       ├── categoria-dto.js
+│   │       ├── pedido-dto.js
+│   │       └── pagamento-dto.js
+│   ├── interfaces/
+│   │   ├── controllers/
+│   │   │   ├── cliente-controller.js
+│   │   │   ├── produto-controller.js
+│   │   │   ├── categoria-controller.js
+│   │   │   ├── pedido-controller.js
+│   │   │   └── pagamento-controller.js
+│   │   ├── routes/
+│   │   │   ├── cliente-routes.js
+│   │   │   ├── produto-routes.js
+│   │   │   ├── categoria-routes.js
+│   │   │   ├── pedido-routes.js
+│   │   │   └── pagamento-routes.js
+│   │   └── middlewares/
+│   │       ├── auth.js                # Middleware de autenticação
+│   │       ├── error-handler.js
+│   │       └── logger.js
+│   └── infrastructure/
+│       ├── repositories/
+│       │   ├── cliente-repository.js
+│       │   ├── produto-repository.js
+│       │   ├── categoria-repository.js
+│       │   ├── pedido-repository.js
+│       │   └── pagamento-repository.js
+│       ├── database/
+│       │   └── dynamo-client.js
+│       ├── external/
+│       │   ├── mercado-pago.js
+│       │   └── aws-cognito.js         # Integração com Cognito
+│       └── config/
+│           ├── env.js
+│           └── server.js
+├── kubernetes/
+│   ├── deployments/
+│   │   └── app-deployment.yaml
+│   ├── services/
+│   │   └── app-service.yaml
+│   ├── config/
+│   │   ├── configmap.yaml
+│   │   └── secrets.yaml
+│   └── hpa/
+│       └── app-hpa.yaml              # Horizontal Pod Autoscaler
+├── tests/
+│   ├── unit/
+│   │   ├── domain/
+│   │   ├── application/
+│   │   └── infrastructure/
+│   └── integration/
+│       ├── api/
+│       └── repositories/
+├── .github/
+│   └── workflows/
+│       ├── test.yml                   # Pipeline de testes
+│       ├── build.yml                  # Pipeline de build
+│       └── deploy.yml                 # Pipeline de deploy
+├── Dockerfile
+├── package.json
+├── jest.config.js
+├── .gitignore
+└── README.md
+```
+
+## Integração entre os Componentes
+
+Agora, vou descrever como esses componentes se integrarão:
+
+1. **Fluxo de Autenticação**:
+   - O cliente faz uma requisição para o API Gateway
+   - O API Gateway encaminha para a função Lambda de autenticação
+   - A função Lambda valida o CPF no DynamoDB
+   - Se válido, gera um token JWT usando AWS Cognito
+   - O token é usado nas requisições subsequentes para o aplicativo principal
+
+2. **Fluxo de Pedido**:
+   - O cliente autenticado faz um pedido através da API
+   - A aplicação valida o token JWT
+   - O pedido é processado e armazenado no DynamoDB
+   - O pagamento é processado via Mercado Pago
+   - O pedido é atualizado com o status de pagamento
+   - O cliente pode acompanhar o status do pedido
+
+## Esteiras CI/CD
+
+### Pipeline para Lambda
+
+```yaml
+name: Deploy Lambda
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 22
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: Deploy with Terraform
+        run: |
+          cd terraform
+          terraform init
+          terraform validate
+          terraform apply -auto-approve
+```
+
+### Pipeline para Database-Infra
+
+```yaml
+name: Deploy Database Infrastructure
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+      - name: Terraform Init
+        run: |
+          cd terraform
+          terraform init
+      - name: Terraform Validate
+        run: |
+          cd terraform
+          terraform validate
+
+  deploy:
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: Terraform Apply
+        run: |
+          cd terraform
+          terraform init
+          terraform apply -auto-approve
+```
+
+As pipelines para Kubernetes-Infra e Kubernetes-App seguiriam padrões semelhantes, adaptados às necessidades específicas de cada repositório.
+
+## Próximos Passos
+
+1. **Etapa inicial**: Criar a estrutura de pastas e arquivos base para cada repositório
+2. **Migração do código**: Transferir e adaptar o código existente para a nova estrutura
+3. **Implementação de Lambda**: Desenvolver a função de autenticação por CPF
+4. **Infraestrutura Terraform**: Definir os recursos AWS necessários
+5. **Integração com Cognito**: Implementar autenticação de usuários
+6. **Testes**: Adaptar e expandir a suíte de testes existente
+7. **Configuração de CI/CD**: Implementar as GitHub Actions
+8. **Documentação**: Atualizar READMEs com instruções detalhadas
+
+Este plano de refatoração permitirá uma transição suave do monolito atual para uma arquitetura moderna baseada em serviços serverless e Kubernetes, mantendo a funcionalidade existente enquanto adiciona novos recursos de autenticação e melhora a escalabilidade e manutenibilidade do sistema.
+
+# Próximos Passos para a Refatoração do Projeto
+
+Ótimo! Agora que a aplicação está funcionando localmente na porta 3000, vamos seguir com os próximos passos para completar a refatoração e implementar a arquitetura completa:
+
+## 1. Configuração do DynamoDB com Terraform
+
+Vamos criar a infraestrutura do banco de dados no repositório database-infra:
+
+```javascript
+// Estrutura do arquivo main.tf no repositório database-infra
+provider "aws" {
+  region = var.aws_region
+}
+
+resource "aws_dynamodb_table" "fast_food_clients" {
+  name           = "FastFoodClients"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "ClienteId"
+
+  attribute {
+    name = "ClienteId"
+    type = "S"
+  }
+
+  attribute {
+    name = "CPF"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name               = "CPFIndex"
+    hash_key           = "CPF"
+    projection_type    = "ALL"
+  }
+
+  tags = {
+    Environment = var.environment
+    Project     = "FastFood"
+  }
+}
+
+// Tabelas adicionais para produtos, pedidos, etc.
+```
+
+## 2. Implementação da Função Lambda para Autenticação
+
+No repositório lambda, vamos implementar a função de autenticação:
+
+```javascript
+// src/functions/auth/index.js
+const { ddbDocClient } = require('../../utils/dynamo-client');
+const { GetCommand } = require('@aws-sdk/lib-dynamodb');
+const { validateCPF } = require('./cpf-validator');
+
+exports.handler = async (event) => {
+  try {
+    const { cpf } = JSON.parse(event.body);
+    
+    // Validação do CPF
+    if (!validateCPF(cpf)) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ message: 'CPF inválido' })
+      };
+    }
+    
+    // Busca cliente pelo CPF
+    const params = {
+      TableName: 'FastFoodClients',
+      IndexName: 'CPFIndex',
+      KeyConditionExpression: 'CPF = :cpf',
+      ExpressionAttributeValues: {
+        ':cpf': cpf
+      }
+    };
+    
+    const { Items } = await ddbDocClient.send(new GetCommand(params));
+    
+    if (!Items || Items.length === 0) {
+      return {
+        statusCode: 404,
+        body: JSON.stringify({ message: 'Cliente não encontrado' })
+      };
+    }
+    
+    // Gerar token JWT ou integrar com Cognito
+    // ...
+    
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ 
+        message: 'Autenticação bem-sucedida',
+        cliente: Items[0]
+      })
+    };
+  } catch (error) {
+    console.error('Erro na autenticação:', error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ message: 'Erro interno no servidor' })
+    };
+  }
+};
+```
+
+## 3. Configuração da Infraestrutura Kubernetes com Terraform
+
+No repositório kubernetes-infra, vamos definir a infraestrutura do cluster:
+
+```javascript
+// Estrutura do arquivo main.tf no repositório kubernetes-infra
+provider "aws" {
+  region = var.aws_region
+}
+
+module "vpc" {
+  source = "terraform-aws-modules/vpc/aws"
+  
+  name = "eks-vpc"
+  cidr = "10.0.0.0/16"
+  
+  azs             = ["us-east-1a", "us-east-1b"]
+  private_subnets = ["10.0.1.0/24", "10.0.2.0/24"]
+  public_subnets  = ["10.0.101.0/24", "10.0.102.0/24"]
+  
+  enable_nat_gateway = true
+  single_nat_gateway = true
+  
+  tags = {
+    Environment = var.environment
+    Project     = "FastFood"
+  }
+}
+
+module "eks" {
+  source          = "terraform-aws-modules/eks/aws"
+  cluster_name    = "fast-food-cluster"
+  cluster_version = "1.28"
+  
+  vpc_id          = module.vpc.vpc_id
+  subnet_ids      = module.vpc.private_subnets
+  
+  // Configuração dos node groups
+}
+```
+
+## 4. Configuração de CI/CD com GitHub Actions
+
+Vamos configurar os workflows de CI/CD para cada repositório:
+
+```yaml
+# .github/workflows/deploy.yml para o repositório kubernetes-app
+name: Deploy Application
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests
+        run: npm test
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.ECR_REPOSITORY }}:latest
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: Deploy to EKS
+        run: |
+          aws eks update-kubeconfig --name fast-food-cluster
+          kubectl apply -f kubernetes/deployments/app-deployment.yaml
+          kubectl apply -f kubernetes/services/app-service.yaml
+```
+
+## 5. Integração entre Componentes
+
+Agora, vamos configurar a integração entre a aplicação Kubernetes e a função Lambda de autenticação:
+
+```javascript
+// Middleware de autenticação no kubernetes-app
+const axios = require('axios');
+
+async function authMiddleware(req, res, next) {
+  try {
+    const { cpf } = req.body;
+    
+    if (!cpf) {
+      return next(); // Permite requisições sem CPF (para usuários não identificados)
+    }
+    
+    // Chama o endpoint de autenticação Lambda via API Gateway
+    const authResponse = await axios.post(process.env.AUTH_API_URL, { cpf });
+    
+    if (authResponse.status === 200) {
+      // Adiciona as informações do cliente à requisição
+      req.cliente = authResponse.data.cliente;
+      next();
+    } else {
+      return res.status(authResponse.status).json({ message: 'Falha na autenticação' });
+    }
+  } catch (error) {
+    console.error('Erro ao autenticar:', error);
+    return res.status(500).json({ message: 'Erro interno no servidor' });
+  }
+}
+
+module.exports = authMiddleware;
+```
+
+## 6. Documentação da Arquitetura
+
+Vamos criar documentação detalhada da arquitetura no arquivo README.md de cada repositório, explicando:
+
+- Visão geral da arquitetura
+- Componentes e suas responsabilidades
+- Fluxos de dados e interações
+- Detalhes de implantação
+- Instruções de configuração e execução
+
+## Próximos Passos:
+
+1. **Configuração do DynamoDB**: Implementar as tabelas e índices necessários
+2. **Implementação da Autenticação**: Completar a função Lambda e integrá-la com API Gateway
+3. **Deploy da Infraestrutura**: Aplicar os scripts Terraform para criar os recursos na AWS
+4. **Proteção dos Branches**: Configurar proteção dos branches main em cada repositório
+5. **Testes de Integração**: Verificar a comunicação entre todos os componentes
+6. **Monitoramento e Logging**: Implementar solução de monitoramento e logging
+
+Deseja que comecemos com alguma dessas etapas específicas?
+
+Código semelhante encontrado com 3 tipos de licença

@@ -1,0 +1,13 @@
+# kubernetes-app/k8s/monitor/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: monitor
+  namespace: monitor
+spec:
+  selector:
+    app: monitor
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP

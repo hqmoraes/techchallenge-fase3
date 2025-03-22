@@ -1,0 +1,9 @@
+{
+  "name": "secret-rotation-lambda",
+  "version": "1.0.0",
+  "description": "Lambda para rotação de secrets do Tech Challenge Fast Food",
+  "main": "index.js",
+  "dependencies": {
+    "aws-sdk": "^2.1032.0"
+  }
+}

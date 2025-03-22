@@ -1,0 +1,1 @@
+# Kubernetes Infrastructure - Fast Food\n\nInfraestrutura Kubernetes para o sistema Fast Food usando EKS na AWS.\n\n## Requisitos\n\n- Terraform\n- AWS CLI configurado\n- kubectl\n\n## Implantação\n\n

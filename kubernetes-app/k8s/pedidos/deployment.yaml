@@ -1,0 +1,54 @@
+# kubernetes-app/k8s/pedidos/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pedidos
+  namespace: pedidos
+  labels:
+    app: pedidos
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pedidos
+  template:
+    metadata:
+      labels:
+        app: pedidos
+    spec:
+      containers:
+      - name: pedidos
+        image: fastfood/pedidos:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        env:
+        - name: AUTH_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              name: app-credentials
+              key: auth-endpoint
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: app-credentials
+              key: jwt-secret
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5

@@ -1,0 +1,35 @@
+# kubernetes-infra/kubernetes/monitoring/fluentd-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentd-config
+  namespace: monitoring
+data:
+  fluent.conf: |
+    <source>
+      @type tail
+      path /var/log/containers/*.log
+      pos_file /var/log/fluentd-containers.log.pos
+      tag kubernetes.*
+      read_from_head true
+      <parse>
+        @type json
+        time_format %Y-%m-%dT%H:%M:%S.%NZ
+      </parse>
+    </source>
+
+    <filter kubernetes.**>
+      @type kubernetes_metadata
+      kubernetes_url https://kubernetes.default.svc
+      bearer_token_file /var/run/secrets/kubernetes.io/serviceaccount/token
+      ca_file /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    </filter>
+
+    <match kubernetes.var.log.containers.**fastfood**.log>
+      @type cloudwatch_logs
+      log_group_name /k8s/fastfood/application
+      log_stream_name_key $.kubernetes.pod_name
+      remove_log_stream_name_key true
+      auto_create_stream true
+      region us-east-1
+    </match>

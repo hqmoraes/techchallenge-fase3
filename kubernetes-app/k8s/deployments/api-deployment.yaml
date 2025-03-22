@@ -1,0 +1,107 @@
+# kubernetes-app/k8s/deployments/api-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fastfood-api
+  namespace: fastfood
+  labels:
+    app: fastfood-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fastfood-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: fastfood-api
+    spec:
+      serviceAccountName: fastfood-app
+      containers:
+      - name: fastfood-api
+        image: ${ECR_REPOSITORY_URI}:latest
+        ports:
+        - containerPort: 8080
+        env:
+        # Configurações do ConfigMap
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: environment
+        - name: API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: api_url
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: log_level
+        # Credenciais do banco de dados via Secret
+        - name: DB_REGION
+          valueFrom:
+            secretKeyRef:
+              name: dynamodb-credentials
+              key: region
+        - name: DB_CLIENTS_TABLE
+          valueFrom:
+            secretKeyRef:
+              name: dynamodb-credentials
+              key: clients_table
+        - name: DB_PRODUCTS_TABLE
+          valueFrom:
+            secretKeyRef:
+              name: dynamodb-credentials
+              key: products_table
+        - name: DB_CATEGORIES_TABLE
+          valueFrom:
+            secretKeyRef:
+              name: dynamodb-credentials
+              key: categories_table
+        - name: DB_ORDERS_TABLE
+          valueFrom:
+            secretKeyRef:
+              name: dynamodb-credentials
+              key: orders_table
+        - name: DB_PAYMENTS_TABLE
+          valueFrom:
+            secretKeyRef:
+              name: dynamodb-credentials
+              key: payments_table
+        # Credenciais de APIs externas via Secret
+        - name: MERCADO_PAGO_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: api-credentials
+              key: mercado_pago_token
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: api-credentials
+              key: jwt_secret
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5

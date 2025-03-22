@@ -1,0 +1,39 @@
+provider "aws" {
+  region = var.region
+}
+
+resource "aws_ecr_repository" "app" {
+  name                 = var.repository_name
+  image_tag_mutability = "MUTABLE"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = var.tags
+}
+
+resource "aws_ecr_lifecycle_policy" "app" {
+  repository = aws_ecr_repository.app.name
+  policy     = jsonencode({
+    lifecyclePolicyText = <<EOF
+    {
+      "rules": [
+        {
+          "rulePriority": 1,
+          "description": "Expire images older than 30 days",
+          "selection": {
+            "tagStatus": "any",
+            "countType": "sinceImagePushed",
+            "countUnit": "days",
+            "countNumber": 30
+          },
+          "action": {
+            "type": "expire"
+          }
+        }
+      ]
+    }
+    EOF
+  })
+}

@@ -1,0 +1,59 @@
+# kubernetes-infra/kubernetes/monitoring/prometheus-values.yaml
+# Configuração para Helm chart kube-prometheus-stack
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    resources:
+      requests:
+        memory: 512Mi
+      limits:
+        memory: 2Gi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 50Gi
+
+grafana:
+  adminPassword: "${GRAFANA_ADMIN_PASSWORD}"
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: 'default'
+          orgId: 1
+          folder: ''
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+  dashboards:
+    default:
+      fastfood-dashboard:
+        json: |
+          {
+            "annotations": {...},
+            "editable": true,
+            "panels": [
+              {
+                "title": "Requisições por segundo",
+                "type": "graph",
+                "datasource": "Prometheus"
+              },
+              {
+                "title": "Latência API (p95)",
+                "type": "graph",
+                "datasource": "Prometheus"
+              },
+              {
+                "title": "Status Code",
+                "type": "stat",
+                "datasource": "Prometheus"
+              }
+            ],
+            "refresh": "10s",
+            "title": "FastFood Dashboard"
+          }

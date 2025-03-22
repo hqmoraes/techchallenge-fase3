@@ -1,0 +1,291 @@
+#!/bin/bash
+# deploy-infra.sh - Script aprimorado para deploy da infraestrutura
+# Alinhado com as diretivas do Tech Challenge Fase 3
+
+set -e  # Encerrar script em caso de erro
+
+# Definir cores para melhor visualização
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+BASEDIR='/mnt/c/Users/henri/OneDrive/Documentos/FIAP/project3/'
+
+# Configurações do backend
+BUCKET_NAME="fiap-techchallenge"
+REGION="us-east-1"
+LOCK_TABLE="terraform-lock"
+
+# Diretórios de infraestrutura em ordem de dependência
+INFRA_DIRS=(
+  $BASEDIR"database-infra/terraform"   # Primeiro: DynamoDB e tabelas
+  $BASEDIR"lambda/terraform"           # Segundo: Funções Lambda e API Gateway
+  $BASEDIR"kubernetes-infra/terraform" # Terceiro: Infraestrutura Kubernetes
+)
+
+# Função para verificar e criar recursos de backend
+function prepare_backend_resources() {
+  echo -e "${YELLOW}Verificando recursos de backend...${NC}"
+  
+  # Verificar se o bucket S3 existe, senão criar
+  if ! aws s3api head-bucket --bucket $BUCKET_NAME 2>/dev/null; then
+    echo -e "${YELLOW}Bucket S3 '$BUCKET_NAME' não encontrado. Criando...${NC}"
+    aws s3api create-bucket --bucket $BUCKET_NAME --region $REGION
+    aws s3api put-bucket-versioning --bucket $BUCKET_NAME --versioning-configuration Status=Enabled
+    echo -e "${GREEN}Bucket S3 criado com sucesso!${NC}"
+  else
+    echo -e "${GREEN}Bucket S3 '$BUCKET_NAME' encontrado.${NC}"
+  fi
+  
+  # Verificar se a tabela DynamoDB existe, senão criar
+  if ! aws dynamodb describe-table --table-name $LOCK_TABLE --region $REGION &> /dev/null; then
+    echo -e "${YELLOW}Tabela DynamoDB '$LOCK_TABLE' não encontrada. Criando...${NC}"
+    aws dynamodb create-table \
+      --table-name $LOCK_TABLE \
+      --attribute-definitions AttributeName=LockID,AttributeType=S \
+      --key-schema AttributeName=LockID,KeyType=HASH \
+      --billing-mode PAY_PER_REQUEST \
+      --region $REGION
+    
+    # Aguardar a tabela ficar disponível
+    echo -e "${YELLOW}Aguardando a tabela DynamoDB ficar disponível...${NC}"
+    aws dynamodb wait table-exists --table-name $LOCK_TABLE --region $REGION
+    echo -e "${GREEN}Tabela DynamoDB criada com sucesso!${NC}"
+  else
+    echo -e "${GREEN}Tabela DynamoDB '$LOCK_TABLE' encontrada.${NC}"
+  fi
+}
+
+# Função para configurar o backend S3
+function configure_backend() {
+  local dir=$1
+  local module_name=$(basename "$dir" | tr '/' '-')
+  
+  # Verificar se já existe algum estado
+  if [ -d ".terraform" ] || [ -f ".terraform.lock.hcl" ]; then
+    BACKEND_EXISTS=true
+  else
+    BACKEND_EXISTS=false
+  fi
+  
+  # Criar arquivo de configuração do backend
+  echo -e "${YELLOW}Configurando backend S3...${NC}"
+  
+  cat > "backend.tf" << EOL
+terraform {
+  backend "s3" {
+    bucket         = "$BUCKET_NAME"
+    key            = "fastfood/$module_name/terraform.tfstate"
+    region         = "$REGION"
+    encrypt        = true
+    dynamodb_table = "$LOCK_TABLE"
+  }
+}
+EOL
+  
+  echo -e "${GREEN}Arquivo backend.tf criado.${NC}"
+  
+  # Reinicializar o Terraform com o novo backend
+  if [ "$BACKEND_EXISTS" = true ]; then
+    echo -e "${YELLOW}Migrando estado existente para o backend S3...${NC}"
+    terraform init -migrate-state -force-copy
+  else
+    echo -e "${YELLOW}Inicializando backend S3...${NC}"
+    terraform init
+  fi
+}
+
+# Função para criar arquivos de acesso ao estado remoto
+function configure_remote_state() {
+  local dir=$1
+  local module_name=$(basename "$dir" | tr '/' '-')
+  
+  # Configurar remote_state.tf para Lambda acessar o estado do DynamoDB
+  if [[ "$module_name" == "lambda-terraform" ]]; then
+    echo -e "${YELLOW}Configurando acesso ao estado remoto do DynamoDB...${NC}"
+    
+    cat > "remote_state.tf" << EOL
+# Acesso ao estado remoto do database-infra
+data "terraform_remote_state" "database" {
+  backend = "s3"
+  
+  config = {
+    bucket = "$BUCKET_NAME"
+    key    = "fastfood/database-infra-terraform/terraform.tfstate"
+    region = "$REGION"
+  }
+}
+EOL
+    echo -e "${GREEN}Arquivo remote_state.tf criado para Lambda.${NC}"
+  fi
+  
+  # Configurar remote_state.tf para Kubernetes acessar o estado do DynamoDB e Lambda
+  if [[ "$module_name" == "kubernetes-infra-terraform" ]]; then
+    echo -e "${YELLOW}Configurando acesso ao estado remoto do DynamoDB e Lambda...${NC}"
+    
+    cat > "remote_state.tf" << EOL
+# Acesso ao estado remoto do database-infra
+data "terraform_remote_state" "database" {
+  backend = "s3"
+  
+  config = {
+    bucket = "$BUCKET_NAME"
+    key    = "fastfood/database-infra-terraform/terraform.tfstate"
+    region = "$REGION"
+  }
+}
+
+# Acesso ao estado remoto do lambda
+data "terraform_remote_state" "lambda" {
+  backend = "s3"
+  
+  config = {
+    bucket = "$BUCKET_NAME"
+    key    = "fastfood/lambda-terraform/terraform.tfstate"
+    region = "$REGION"
+  }
+}
+EOL
+    echo -e "${GREEN}Arquivo remote_state.tf criado para Kubernetes.${NC}"
+  fi
+}
+
+# Função para executar terraform em um diretório específico
+function run_terraform() {
+  local dir=$1
+  local action=$2
+  
+  echo -e "${YELLOW}=== Executando terraform $action em $dir ===${NC}"
+  
+  # Verificar se o diretório existe
+  if [ ! -d "$dir" ]; then
+    echo -e "${RED}Diretório $dir não encontrado. Pulando...${NC}"
+    return 1
+  fi
+  
+  # Navegar para o diretório
+  cd "$dir"
+  
+  # Inicializar Terraform
+  echo -e "${YELLOW}Inicializando Terraform...${NC}"
+  terraform init
+  
+  # Verificar se o backend S3 está configurado
+  if grep -q "backend \"s3\"" *.tf; then
+    echo -e "${GREEN}Backend S3 configurado.${NC}"
+  else
+    echo -e "${YELLOW}AVISO: Backend S3 não encontrado. Configurando...${NC}"
+    configure_backend "$dir"
+  fi
+  
+  # Configurar acesso ao estado remoto, se necessário
+  configure_remote_state "$dir"
+  
+  # Executar validação
+  echo -e "${YELLOW}Validando configuração...${NC}"
+  terraform validate
+  
+  # Executar plan ou apply conforme solicitado
+  if [ "$action" == "plan" ]; then
+    echo -e "${YELLOW}Executando terraform plan...${NC}"
+    terraform plan -out=tfplan
+  elif [ "$action" == "apply" ]; then
+      terraform apply -auto-approve
+  fi
+  
+  # Voltar para o diretório raiz do projeto
+  cd - > /dev/null
+  
+  echo -e "${GREEN}=== Terraform $action em $dir concluído com sucesso! ===${NC}"
+}
+
+# Função principal para executar operações em todos os diretórios
+function main() {
+  local action=$1
+  
+  if [ "$action" != "plan" ] && [ "$action" != "apply" ]; then
+    echo -e "${RED}Ação inválida. Use 'plan' ou 'apply'.${NC}"
+    exit 1
+  fi
+  
+  # Armazenar diretório inicial
+  INITIAL_DIR=$(pwd)
+  
+  echo -e "${GREEN}=== Iniciando terraform $action em todos os módulos ===${NC}"
+  
+  # Preparar recursos de backend
+  prepare_backend_resources
+  
+  # Executar terraform na ordem especificada
+  for dir in "${INFRA_DIRS[@]}"; do
+    cd "$INITIAL_DIR"
+    run_terraform "$dir" "$action"
+    
+    # Verificar se a operação foi bem-sucedida
+    if [ $? -ne 0 ]; then
+      echo -e "${RED}Erro ao executar terraform $action em $dir. Abortando.${NC}"
+      exit 1
+    fi
+    
+    if [ "$action" == "plan" ]; then
+      echo -e "${YELLOW}Revise o plano gerado em $dir/tfplan antes de aplicar as alterações.${NC}"
+    fi
+    
+    echo ""
+  done
+  
+  cd "$INITIAL_DIR"
+  
+  if [ "$action" == "plan" ]; then
+    echo -e "${GREEN}=== Todos os planos gerados com sucesso! ===${NC}"
+    echo -e "${YELLOW}Execute '$0 apply' para aplicar as alterações.${NC}"
+  else
+    echo -e "${GREEN}=== Toda a infraestrutura foi provisionada com sucesso! ===${NC}"
+  fi
+}
+
+# Verificar se a AWS CLI está configurada
+if ! command -v aws &> /dev/null; then
+  echo -e "${RED}AWS CLI não encontrada. Por favor, instale e configure.${NC}"
+  exit 1
+fi
+
+# Verificar se o Terraform está instalado
+if ! command -v terraform &> /dev/null; then
+  echo -e "${RED}Terraform não encontrado. Por favor, instale.${NC}"
+  exit 1
+fi
+
+# Mostrar uso se nenhum argumento for fornecido
+if [ $# -eq 0 ]; then
+  echo -e "Uso: $0 [plan|apply]"
+  echo -e "  plan  - Gera planos Terraform para todos os módulos"
+  echo -e "  apply - Aplica os planos Terraform em todos os módulos"
+  exit 1
+fi
+
+# Executar a função principal com o argumento fornecido
+main "$1"
+
+# Adicionar novas funcionalidades
+echo -e "${YELLOW}=== Implantando infraestrutura com AWS Secrets Manager e IRSA ===${NC}"
+
+# 1. Implantar database-infra (com Secrets Manager)
+echo -e "${YELLOW}=== Implantando database-infra ===${NC}"
+cd database-infra/terraform
+terraform init
+terraform apply -auto-approve
+
+# 2. Implantar kubernetes-infra (com IRSA)
+echo -e "${YELLOW}=== Implantando kubernetes-infra ===${NC}"
+cd ../../kubernetes-infra/terraform
+terraform init
+terraform apply -auto-approve
+
+# 3. Implantar kubernetes-app (com Service Accounts)
+echo -e "${YELLOW}=== Implantando kubernetes-app ===${NC}"
+cd ../../kubernetes-app/terraform
+terraform init
+terraform apply -auto-approve
+
+echo -e "${GREEN}=== Infraestrutura implantada com sucesso! ===${NC}"

@@ -1,0 +1,21 @@
+# lambda/template.yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  AuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/functions/auth/index.handler
+      Runtime: nodejs18.x
+      Timeout: 30  # Aumentado para 30 segundos
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /auth
+            Method: post
+      Environment:
+        Variables:
+          CLIENTS_TABLE: FastFoodClients
+          JWT_SECRET: test-secret-key
