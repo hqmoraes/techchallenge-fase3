@@ -27,33 +27,3 @@ resource "aws_iam_policy" "dynamodb_policy" {
   })
 }
 
-# Política para logs do CloudWatch
-resource "aws_iam_policy" "lambda_logging" {
-  name        = "${var.environment}-lambda-logging-policy"
-  description = "Política que permite que o Lambda escreva logs no CloudWatch"
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ],
-        Effect   = "Allow",
-        Resource = "arn:aws:logs:*:*:*"
-      }
-    ]
-  })
-
-  tags = merge(var.tags, {
-    Service = "Logging"
-  })
-}
-
-# Attachment da política de logging
-resource "aws_iam_role_policy_attachment" "lambda_logging_attachment" {
-  role       = aws_iam_role.lambda_role.name
-  policy_arn = aws_iam_policy.lambda_logging.arn
-}

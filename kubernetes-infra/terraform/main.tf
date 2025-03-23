@@ -108,7 +108,12 @@ module "eks" {
 module "ecr" {
   source = "./ecr"
   
+  project_name   = var.project_name
+  environment    = var.environment
+  aws_account_id = var.aws_account_id
+  region         = var.region
 }
+
 
 
 

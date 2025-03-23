@@ -1,18 +1,15 @@
 resource "aws_ecr_repository" "fastfood_app" {
-  # Usar variáveis para definir o nome do repositório
   name                 = "${var.project_name}-app-${var.environment}"
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = var.image_tag_mutability
 
   image_scanning_configuration {
-    scan_on_push = true
+    scan_on_push = var.scan_on_push
   }
 
-  # Habilitar encriptação para atender os requisitos de segurança
   encryption_configuration {
     encryption_type = "AES256"
   }
 
-  # Tags para rastreabilidade
   tags = {
     Project     = var.project_name
     Environment = var.environment
@@ -20,7 +17,6 @@ resource "aws_ecr_repository" "fastfood_app" {
   }
 }
 
-# Política de lifecycle para manter apenas as últimas N imagens
 resource "aws_ecr_lifecycle_policy" "fastfood_app_lifecycle" {
   repository = aws_ecr_repository.fastfood_app.name
 
@@ -28,11 +24,11 @@ resource "aws_ecr_lifecycle_policy" "fastfood_app_lifecycle" {
     rules = [
       {
         rulePriority = 1
-        description  = "Keep last 10 images"
+        description  = "Keep last ${var.max_image_count} images"
         selection = {
           tagStatus     = "any"
           countType     = "imageCountMoreThan"
-          countNumber   = 10
+          countNumber   = var.max_image_count
         }
         action = {
           type = "expire"
@@ -42,7 +38,6 @@ resource "aws_ecr_lifecycle_policy" "fastfood_app_lifecycle" {
   })
 }
 
-# Política de repositório para acesso seguro
 resource "aws_ecr_repository_policy" "fastfood_app_policy" {
   repository = aws_ecr_repository.fastfood_app.name
 

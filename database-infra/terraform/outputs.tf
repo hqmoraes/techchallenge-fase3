@@ -42,7 +42,4 @@ output "categories_table_arn" {
   value       = aws_dynamodb_table.fast_food_categories.arn
 }
 
-output "external_api_secret_arn" {
-  description = "ARN do secret para APIs externas"
-  value       = aws_secretsmanager_secret.api_credentials.arn
-}
+

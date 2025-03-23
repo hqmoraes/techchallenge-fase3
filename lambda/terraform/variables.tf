@@ -34,3 +34,9 @@ variable "tags" {
     Owner       = "DevOps"
   }
 }
+
+variable "dynamodb_table_arn" {
+  description = "ARN da tabela DynamoDB para a função Lambda"
+  type        = string
+  default     = ""
+}

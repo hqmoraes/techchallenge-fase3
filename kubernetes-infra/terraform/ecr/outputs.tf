@@ -20,13 +20,4 @@ output "repository_registry_id" {
   value       = aws_ecr_repository.fastfood_app.registry_id
 }
 
-output "repository_url_with_tag" {
-  description = "URL do repositório ECR com tag latest"
-  value       = "${aws_ecr_repository.fastfood_app.repository_url}:latest"
-}
 
-# Outputs
-output "ecr_repository_url" {
-  value       = module.ecr.repository_url
-  description = "URI do repositório ECR para a aplicação Fast Food"
-}
