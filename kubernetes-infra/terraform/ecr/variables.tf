@@ -84,15 +84,13 @@ variable "node_group_max_size" {
 }
 
 variable "environment" {
-  description = "Ambiente de implantação (dev, stage, prod)"
+  description = "Environment (dev, prod, etc.)"
   type        = string
-  default     = "dev"
 }
 
 variable "project_name" {
-  description = "Nome do projeto"
+  description = "Name of the project"
   type        = string
-  default     = "fastfood"
 }
 
 variable "eks_node_role" {
@@ -108,19 +106,25 @@ variable "ecr_repository_name" {
 }
 
 variable "image_tag_mutability" {
-  description = "Configuração de mutabilidade das tags de imagem (MUTABLE ou IMMUTABLE)"
+  description = "The tag mutability setting for the repository"
   type        = string
   default     = "MUTABLE"
 }
 
 variable "scan_on_push" {
-  description = "Habilitar verificação de vulnerabilidades ao fazer push de imagens"
+  description = "Indicates whether images are scanned after being pushed to the repository"
   type        = bool
   default     = true
 }
 
 variable "max_image_count" {
-  description = "Número máximo de imagens a serem mantidas no repositório"
+  description = "Maximum number of images to keep in the repository"
   type        = number
   default     = 10
+}
+
+variable "aws_region" {
+  description = "AWS region where the repository is created"
+  type        = string
+  default     = "us-east-1"  # Change to your default region
 }

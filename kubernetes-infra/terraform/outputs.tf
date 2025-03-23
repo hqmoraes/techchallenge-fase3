@@ -42,3 +42,18 @@ output "public_subnet_ids" {
   description = "Public subnet IDs"
   value       = [aws_subnet.public_subnet_1.id, aws_subnet.public_subnet_2.id]
 }
+
+output "ecr_repository_url" {
+  description = "The URL of the ECR repository"
+  value       = module.ecr.repository_url
+}
+
+output "ecr_registry_id" {
+  description = "The registry ID of the ECR repository"
+  value       = module.ecr.registry_id
+}
+
+output "ecr_repository_name" {
+  description = "The name of the ECR repository"
+  value       = module.ecr.repository_name
+}
