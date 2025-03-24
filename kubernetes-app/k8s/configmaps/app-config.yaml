@@ -6,8 +6,10 @@ metadata:
 data:
   NODE_ENV: "production"
   PORT: "3000"
-  DYNAMODB_CLIENTS_TABLE: ""
-  DYNAMODB_PRODUCTS_TABLE: ""
-  DYNAMODB_ORDERS_TABLE: ""
-  AUTH_API_URL: ""
+  DYNAMODB_PRODUCTS_TABLE: "dev-FastFoodProducts"
+  DYNAMODB_CATEGORIES_TABLE: "dev-FastFoodCategories"
+  DYNAMODB_ORDERS_TABLE: "dev-FastFoodOrders"
+  DYNAMODB_PAYMENTS_TABLE: "dev-FastFoodPayments"
+  DYNAMODB_CLIENTS_TABLE: "dev-FastFoodClients"
   AWS_REGION: "us-east-1"
+  # Remover qualquer referência ao INIT_DB ou scripts de inicialização

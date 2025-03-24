@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-test
+  namespace: fastfood
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-test
+  template:
+    metadata:
+      labels:
+        app: api-test
+    spec:
+      containers:
+      - name: swagger
+        image: swaggerapi/swagger-ui
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SWAGGER_JSON_URL
+          value: "https://raw.githubusercontent.com/OAI/OpenAPI-Specification/master/examples/v3.0/petstore-expanded.yaml"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-test
+  namespace: fastfood
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    app: api-test

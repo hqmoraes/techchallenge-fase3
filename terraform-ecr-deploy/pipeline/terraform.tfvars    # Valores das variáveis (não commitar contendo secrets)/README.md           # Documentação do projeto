@@ -1,9 +1,0 @@
-terraform-ecr-deploy/pipeline/terraform.tfvars
-
-# Valores das variáveis (não commitar contendo secrets)
-repository_name = "my-app-repo"
-region = "us-west-2"
-pipeline_name = "my-app-pipeline"
-image_tag = "latest"
-build_spec = "buildspec.yml"
-service_role = "arn:aws:iam::123456789012:role/service-role/my-service-role"

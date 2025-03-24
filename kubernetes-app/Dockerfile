@@ -1,24 +1,18 @@
-# Use a imagem base oficial do Node.js
-FROM node:20
+FROM node:18-alpine
 
-# Defina o diretório de trabalho dentro do contêiner
 WORKDIR /app
 
-# Copie o package.json e o package-lock.json para o diretório de trabalho
+# Copiar apenas os arquivos de configuração primeiro
 COPY package*.json ./
 
-# Instale as dependências do projeto
+# Instalar dependências
 RUN npm install
 
-# Copie o restante do código da aplicação para o diretório de trabalho
+# Copiar o código fonte
 COPY . .
 
-# Exponha a porta que a aplicação irá rodar
+# Expor a porta
 EXPOSE 3000
 
-# Defina as variáveis de ambiente necessárias
-ENV NODE_ENV=production
-ENV PORT=3000
-
 # Comando para iniciar a aplicação
-CMD ["sh", "-c", "npm run init-db && npm start"]
+CMD ["npm", "start"]

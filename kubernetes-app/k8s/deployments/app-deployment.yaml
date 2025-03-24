@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: fastfood-api
-        image: :latest
+        image: 691780621308.dkr.ecr.us-east-1.amazonaws.com/fastfood-app-dev:latest
         ports:
         - containerPort: 3000
         envFrom:
@@ -32,9 +32,10 @@ spec:
           limits:
             cpu: "500m"
             memory: "512Mi"
+        command: ["npm", "start"]
         livenessProbe:
           httpGet:
-            path: /
+            path: /health
             port: 3000
           initialDelaySeconds: 30
           periodSeconds: 30

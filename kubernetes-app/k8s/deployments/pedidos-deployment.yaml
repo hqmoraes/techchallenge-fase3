@@ -27,7 +27,8 @@ spec:
     spec:
       containers:
       - name: pedidos
-        image: ${ECR_REPOSITORY_URI}/fastfood-app:latest
+        # Imagem corrigida com o caminho completo do ECR
+        image: 691780621308.dkr.ecr.us-east-1.amazonaws.com/fastfood-app-dev:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
@@ -41,8 +42,8 @@ spec:
         envFrom:
         - configMapRef:
             name: app-config
-        - configMapRef:
-            name: database-config
+        - secretRef:
+            name: app-secrets
         env:
         - name: AUTH_ENDPOINT
           valueFrom:

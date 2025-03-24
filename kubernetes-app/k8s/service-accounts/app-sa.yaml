@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fastfood-api-sa
+  namespace: fastfood
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::691780621308:role/fastfood-dynamodb-role

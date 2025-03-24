@@ -1,0 +1,124 @@
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+const bodyParser = require('body-parser');
+const pedidoRoutes = require('./interfaces/routes/pedidoRoutes');
+const pagamentoRoutes = require('./interfaces/routes/pagamentoRoutes');
+const acompanhamentoRoutes = require('./interfaces/routes/acompanhamentoRoutes');
+const adminRoutes = require('./interfaces/routes/adminRoutes');
+const clienteRoutes = require('./interfaces/routes/clienteRoutes');
+const produtoRoutes = require('./interfaces/routes/produtoRoutes');
+const categoriaRoutes = require('./interfaces/routes/categoriaRoutes');
+const swaggerUi = require('swagger-ui-express');
+const specs = require('./infrastructure/config/swagger');
+const authMiddleware = require('./interfaces/middlewares/authMiddleware');
+
+// Carregar variáveis de ambiente
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Configurar middleware
+app.use(cors());
+app.use(bodyParser.json());
+app.use(express.json());
+
+// Configuração do Swagger
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+
+// Aplicar middleware globalmente (exceto rotas públicas)
+app.use('/clientes', authMiddleware);
+app.use('/pedidos', authMiddleware);
+
+// Ajuste das rotas para a nova estrutura
+app.use('/pedidos', pedidoRoutes);
+app.use('/pagamentos', pagamentoRoutes);
+app.use('/acompanhamento', acompanhamentoRoutes);
+app.use('/admin', adminRoutes);
+app.use('/clientes', clienteRoutes);
+app.use('/produtos', produtoRoutes);
+app.use('/categorias', categoriaRoutes);
+
+// Configurar DynamoDB
+const dynamoConfig = {
+  region: process.env.AWS_REGION || 'us-east-1'
+};
+
+// Se estiver em ambiente de desenvolvimento, use o endpoint local
+if (process.env.DYNAMODB_ENDPOINT) {
+  dynamoConfig.endpoint = process.env.DYNAMODB_ENDPOINT;
+}
+
+const client = new DynamoDBClient(dynamoConfig);
+const dynamoDB = DynamoDBDocumentClient.from(client);
+
+// Rota básica de health check
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
+// Rota de ready check
+app.get('/ready', (req, res) => {
+  res.status(200).json({ status: 'ready', timestamp: new Date().toISOString() });
+});
+
+// Rota para pedidos
+app.get('/api/orders', async (req, res) => {
+  try {
+    const tableName = process.env.DYNAMODB_ORDERS_TABLE;
+    console.log(`Buscando pedidos na tabela: ${tableName}`);
+    
+    // Se estamos em ambiente de teste, retornamos dados mock
+    if (process.env.NODE_ENV === 'test') {
+      return res.status(200).json({ 
+        orders: [
+          { id: '1', customerName: 'João', status: 'READY', items: ['Hambúrguer', 'Batata'] },
+          { id: '2', customerName: 'Maria', status: 'PREPARING', items: ['Pizza', 'Refrigerante'] }
+        ]
+      });
+    }
+    
+    // Tentar buscar dados reais do DynamoDB
+    const params = {
+      TableName: tableName
+    };
+    
+    try {
+      const data = await dynamoDB.send(new ScanCommand(params));
+      res.status(200).json({ orders: data.Items || [] });
+    } catch (dbError) {
+      console.error(`Erro ao acessar DynamoDB: ${dbError.message}`);
+      res.status(200).json({ 
+        message: 'Não foi possível acessar o DynamoDB, exibindo dados simulados.',
+        error: dbError.message,
+        orders: [] 
+      });
+    }
+  } catch (error) {
+    console.error('Erro ao processar a requisição:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Iniciar o servidor
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`Servidor rodando na porta ${PORT}`);
+    console.log(`Health check: http://localhost:${PORT}/health`);
+    console.log(`Ready check: http://localhost:${PORT}/ready`);
+    console.log(`API de pedidos: http://localhost:${PORT}/api/orders`);
+    
+    // Mostrar variáveis de ambiente (sem valores sensíveis)
+    console.log('Variáveis de ambiente:');
+    console.log(`- NODE_ENV: ${process.env.NODE_ENV}`);
+    console.log(`- PORT: ${process.env.PORT}`);
+    console.log(`- DYNAMODB_ORDERS_TABLE: ${process.env.DYNAMODB_ORDERS_TABLE}`);
+    console.log(`- AWS_REGION: ${process.env.AWS_REGION}`);
+    console.log(`- DYNAMODB_ENDPOINT: ${process.env.DYNAMODB_ENDPOINT || 'não definido'}`);
+  });
+}
+
+module.exports = app;
