@@ -1,20 +1,15 @@
 resource "aws_ecr_repository" "fastfood_app" {
   name                 = "${var.project_name}-app-${var.environment}"
-  image_tag_mutability = var.image_tag_mutability
-  force_delete         = true  # Add this to allow deletion with images
+  image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
-    scan_on_push = var.scan_on_push
-  }
-
-  encryption_configuration {
-    encryption_type = "AES256"
+    scan_on_push = true
   }
 
   tags = {
-    Project     = var.project_name
     Environment = var.environment
-    ManagedBy   = "Terraform"
+    Project     = var.project_name
   }
 }
 

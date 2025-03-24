@@ -9,13 +9,13 @@ output "cluster_endpoint" {
 }
 
 output "cluster_security_group_id" {
-  description = "ID do grupo de segurança criado para o cluster EKS"
-  value       = module.eks.cluster_security_group_id
+  description = "Security group ID attached to the EKS cluster"
+  value       = aws_security_group.eks_cluster_sg.id
 }
 
 output "kubectl_config" {
-  description = "Comando para configurar kubectl"
-  value       = "aws eks update-kubeconfig --name ${module.eks.cluster_name} --region ${var.aws_region}"
+  description = "kubectl config command to connect to the cluster"
+  value       = "aws eks update-kubeconfig --name ${aws_eks_cluster.fastfood.name} --region ${var.region}"
 }
 
 output "kubeconfig_certificate_authority_data" {
@@ -44,7 +44,7 @@ output "public_subnet_ids" {
 }
 
 output "ecr_repository_url" {
-  description = "The URL of the ECR repository"
+  description = "URL of the ECR repository"
   value       = module.ecr.repository_url
 }
 
@@ -56,4 +56,9 @@ output "ecr_registry_id" {
 output "ecr_repository_name" {
   description = "The name of the ECR repository"
   value       = module.ecr.repository_name
+}
+
+output "eks_cluster_name" {
+  description = "Name of the EKS cluster"
+  value       = aws_eks_cluster.fastfood.name
 }

@@ -1,3 +1,3 @@
-export ECR_REGISTRY="691780621308.dkr.ecr.us-east-1.amazonaws.com"
-export ECR_REPOSITORY_URI="691780621308.dkr.ecr.us-east-1.amazonaws.com/fastfood-app-dev"
-export IMAGE_TAG="20250323084643"
+export EKS_CLUSTER_NAME="fastfood-cluster"
+export KUBECTL_CONFIG_CMD="aws eks update-kubeconfig --name fastfood-cluster --region us-east-1"
+export APP_ENDPOINT="aa1bdbd7b40ae466897ce82c22e50975-310959112.us-east-1.elb.amazonaws.com"
