@@ -22,9 +22,22 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
       
+      - name: Verificar existência do cluster EKS
+        id: check-cluster
+        run: |
+          if aws eks describe-cluster --name fastfood-dev --region us-east-1 &>/dev/null; then
+            echo "O cluster fastfood-dev existe. Prosseguindo com os testes."
+            echo "cluster_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "O cluster fastfood-dev não está criado."
+            echo "cluster_exists=false" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Configure kubectl
+        if: steps.check-cluster.outputs.cluster_exists == 'true'
         run: |
           aws eks update-kubeconfig --name fastfood-dev --region us-east-1
       
       - name: Run integration tests
+        if: steps.check-cluster.outputs.cluster_exists == 'true'
         run: ./run-integration-tests.sh
