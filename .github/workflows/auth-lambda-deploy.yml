@@ -1,0 +1,105 @@
+name: Auth Lambda Deployment
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'lambda/auth/**'
+      - '.github/workflows/auth-lambda-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  check-dependencies:
+    runs-on: ubuntu-latest
+    outputs:
+      infra_ready: ${{ steps.check-infra.outputs.infra_ready }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Check if infrastructure is ready
+        id: check-infra
+        run: |
+          if aws eks describe-cluster --name fastfood-dev --region us-east-1 &>/dev/null; then
+            echo "Infrastructure is ready. Proceeding with Lambda deployment."
+            echo "infra_ready=true" >> $GITHUB_OUTPUT
+          else
+            echo "Infrastructure is not ready. Lambda deployment will be skipped."
+            echo "infra_ready=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+  deploy-auth-lambda:
+    needs: check-dependencies
+    if: needs.check-dependencies.outputs.infra_ready == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Install dependencies and build
+        run: |
+          cd lambda/auth
+          npm install
+          npm run build
+      
+      - name: Package Lambda function
+        run: |
+          cd lambda/auth
+          zip -r function.zip .
+      
+      - name: Check if Lambda function exists
+        id: check-lambda
+        run: |
+          if aws lambda get-function --function-name fastfood-auth &>/dev/null; then
+            echo "Lambda function exists. Updating..."
+            echo "lambda_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Lambda function does not exist. Creating..."
+            echo "lambda_exists=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create Lambda function
+        if: steps.check-lambda.outputs.lambda_exists == 'false'
+        run: |
+          aws lambda create-function \
+            --function-name fastfood-auth \
+            --runtime nodejs18.x \
+            --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-auth-role \
+            --handler index.handler \
+            --zip-file fileb://lambda/auth/function.zip \
+            --environment Variables={DYNAMODB_USERS_TABLE=dev-FastFoodUsers}
+      
+      - name: Update Lambda function
+        if: steps.check-lambda.outputs.lambda_exists == 'true'
+        run: |
+          aws lambda update-function-code \
+            --function-name fastfood-auth \
+            --zip-file fileb://lambda/auth/function.zip
+      
+      - name: Test Lambda function
+        run: |
+          aws lambda invoke \
+            --function-name fastfood-auth \
+            --payload '{"action": "health"}' \
+            --cli-binary-format raw-in-base64-out \
+            response.json
+          
+          cat response.json

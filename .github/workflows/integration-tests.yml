@@ -2,18 +2,15 @@
 name: Integration Tests
 
 on:
-  workflow_dispatch:
   schedule:
     - cron: '0 0 * * *'  # Diariamente à meia-noite
+  workflow_dispatch:
 
 jobs:
   integration-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '22'
       
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -22,22 +19,56 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
       
-      - name: Verificar existência do cluster EKS
-        id: check-cluster
+      - name: Verificar componentes necessários
+        id: check-components
         run: |
+          # Verificar se o cluster existe
           if aws eks describe-cluster --name fastfood-dev --region us-east-1 &>/dev/null; then
-            echo "O cluster fastfood-dev existe. Prosseguindo com os testes."
-            echo "cluster_exists=true" >> $GITHUB_OUTPUT
+            echo "Cluster EKS 'fastfood-dev' existe."
+            CLUSTER_EXISTS=true
           else
-            echo "O cluster fastfood-dev não está criado."
+            echo "O cluster EKS 'fastfood-dev' não está criado. Encerrando testes."
             echo "cluster_exists=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Configurar kubectl se o cluster existir
+          if [ "$CLUSTER_EXISTS" = true ]; then
+            aws eks update-kubeconfig --name fastfood-dev --region us-east-1
+            
+            # Verificar se o serviço de pedidos existe
+            if kubectl get deployment pedidos -n fastfood &>/dev/null; then
+              echo "Serviço de pedidos existe."
+              echo "all_components_exist=true" >> $GITHUB_OUTPUT
+            else
+              echo "O serviço de pedidos não está implantado. Encerrando testes."
+              echo "all_components_exist=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
           fi
       
-      - name: Configure kubectl
-        if: steps.check-cluster.outputs.cluster_exists == 'true'
+      - name: Executar testes de integração
+        if: steps.check-components.outputs.all_components_exist == 'true'
         run: |
-          aws eks update-kubeconfig --name fastfood-dev --region us-east-1
-      
-      - name: Run integration tests
-        if: steps.check-cluster.outputs.cluster_exists == 'true'
-        run: ./run-integration-tests.sh
+          SERVICE_URL=$(kubectl get svc pedidos -n fastfood -o jsonpath="{.status.loadBalancer.ingress[0].hostname}")
+          
+          echo "Testando endpoints da API..."
+          
+          # Testar health check
+          HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${SERVICE_URL}/health)
+          echo "Health check status: $HEALTH_STATUS"
+          
+          # Testar API de pedidos
+          ORDERS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${SERVICE_URL}/api/pedidos)
+          echo "Orders API status: $ORDERS_STATUS"
+          
+          # Testar Swagger
+          SWAGGER_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${SERVICE_URL}/swagger)
+          echo "Swagger UI status: $SWAGGER_STATUS"
+          
+          if [[ "$HEALTH_STATUS" != "200" || "$ORDERS_STATUS" != "200" || "$SWAGGER_STATUS" != "200" ]]; then
+            echo "Testes de integração falharam!"
+            exit 1
+          fi
+          
+          echo "Todos os testes de integração passaram com sucesso!"

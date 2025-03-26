@@ -1,0 +1,101 @@
+name: DynamoDB Tables Deployment
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/dynamodb/**'
+      - '.github/workflows/dynamodb-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  check-infrastructure:
+    runs-on: ubuntu-latest
+    outputs:
+      infra_ready: ${{ steps.check-infra.outputs.infra_ready }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Check if infrastructure is ready
+        id: check-infra
+        run: |
+          if aws eks describe-cluster --name fastfood-dev --region us-east-1 &>/dev/null; then
+            echo "Infrastructure is ready. Proceeding with DynamoDB deployment."
+            echo "infra_ready=true" >> $GITHUB_OUTPUT
+          else
+            echo "Infrastructure is not ready. DynamoDB deployment will be skipped."
+            echo "infra_ready=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+  deploy-dynamodb:
+    needs: check-infrastructure
+    if: needs.check-infrastructure.outputs.infra_ready == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Create DynamoDB tables
+        run: |
+          # Verificar se as tabelas já existem
+          if aws dynamodb describe-table --table-name dev-FastFoodProducts &>/dev/null; then
+            echo "Tabela dev-FastFoodProducts já existe"
+          else
+            echo "Criando tabela dev-FastFoodProducts..."
+            aws dynamodb create-table \
+              --table-name dev-FastFoodProducts \
+              --attribute-definitions AttributeName=id,AttributeType=S \
+              --key-schema AttributeName=id,KeyType=HASH \
+              --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5
+          fi
+          
+          if aws dynamodb describe-table --table-name dev-FastFoodCategories &>/dev/null; then
+            echo "Tabela dev-FastFoodCategories já existe"
+          else
+            echo "Criando tabela dev-FastFoodCategories..."
+            aws dynamodb create-table \
+              --table-name dev-FastFoodCategories \
+              --attribute-definitions AttributeName=id,AttributeType=S \
+              --key-schema AttributeName=id,KeyType=HASH \
+              --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5
+          fi
+          
+          if aws dynamodb describe-table --table-name dev-FastFoodOrders &>/dev/null; then
+            echo "Tabela dev-FastFoodOrders já existe"
+          else
+            echo "Criando tabela dev-FastFoodOrders..."
+            aws dynamodb create-table \
+              --table-name dev-FastFoodOrders \
+              --attribute-definitions AttributeName=id,AttributeType=S \
+              --key-schema AttributeName=id,KeyType=HASH \
+              --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5
+          fi
+          
+          if aws dynamodb describe-table --table-name dev-FastFoodPayments &>/dev/null; then
+            echo "Tabela dev-FastFoodPayments já existe"
+          else
+            echo "Criando tabela dev-FastFoodPayments..."
+            aws dynamodb create-table \
+              --table-name dev-FastFoodPayments \
+              --attribute-definitions AttributeName=id,AttributeType=S \
+              --key-schema AttributeName=id,KeyType=HASH \
+              --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5
+          fi
+      
+      - name: Verify DynamoDB tables
+        run: |
+          aws dynamodb list-tables

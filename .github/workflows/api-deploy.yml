@@ -1,0 +1,140 @@
+name: API Deployment
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'test-api/**'
+      - '.github/workflows/api-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  check-dependencies:
+    runs-on: ubuntu-latest
+    outputs:
+      infra_ready: ${{ steps.check-infra.outputs.infra_ready }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Check if infrastructure is ready
+        id: check-infra
+        run: |
+          if aws eks describe-cluster --name fastfood-dev --region us-east-1 &>/dev/null; then
+            echo "Infrastructure is ready. Proceeding with deployment."
+            echo "infra_ready=true" >> $GITHUB_OUTPUT
+          else
+            echo "Infrastructure is not ready. Deployment will be skipped."
+            echo "infra_ready=false" >> $GITHUB_OUTPUT
+          fi
+  
+  deploy-api:
+    needs: check-dependencies
+    if: needs.check-dependencies.outputs.infra_ready == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name fastfood-dev --region us-east-1
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: fastfood-app-dev
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd test-api
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+      
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl apply -f kubernetes/api-deployment.yaml
+          kubectl set image deployment/pedidos -n fastfood pedidos=${{ steps.login-ecr.outputs.registry }}/fastfood-app-dev:${{ github.sha }}
+          kubectl rollout status deployment/pedidos -n fastfood --timeout=300s
+  
+  test-deployment:
+    needs: deploy-api
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name fastfood-dev --region us-east-1
+      
+      - name: Wait for service to be available
+        run: |
+          SERVICE_URL=$(kubectl get svc pedidos -n fastfood -o jsonpath="{.status.loadBalancer.ingress[0].hostname}")
+          
+          # Aguardar até que o endpoint esteja respondendo ou timeout (3 minutos)
+          timeout=180
+          counter=0
+          echo "Waiting for service to be available at http://${SERVICE_URL}/health"
+          until $(curl --output /dev/null --silent --fail http://${SERVICE_URL}/health); do
+            if [ $counter -ge $timeout ]; then
+              echo "Service health check failed after $timeout seconds"
+              exit 1
+            fi
+            counter=$((counter+5))
+            echo "Still waiting for service... ($counter seconds elapsed)"
+            sleep 5
+          done
+          echo "Service is available!"
+      
+      - name: Run integration tests
+        id: integration-tests
+        run: |
+          SERVICE_URL=$(kubectl get svc pedidos -n fastfood -o jsonpath="{.status.loadBalancer.ingress[0].hostname}")
+          
+          # Executar testes básicos nos endpoints
+          echo "Testing /health endpoint..."
+          HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${SERVICE_URL}/health)
+          
+          echo "Testing /api/pedidos endpoint..."
+          ORDERS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${SERVICE_URL}/api/pedidos)
+          
+          # Verificar resultados
+          if [[ "$HEALTH_STATUS" == "200" && "$ORDERS_STATUS" == "200" ]]; then
+            echo "Integration tests passed!"
+            exit 0
+          else
+            echo "Integration tests failed: Health status: $HEALTH_STATUS, Orders status: $ORDERS_STATUS"
+            exit 1
+          fi
+      
+      - name: Rollback on failure
+        if: failure() && steps.integration-tests.outcome == 'failure'
+        run: |
+          echo "Tests failed, performing rollback to previous version..."
+          kubectl rollout undo deployment/pedidos -n fastfood
+          kubectl rollout status deployment/pedidos -n fastfood --timeout=300s
+          echo "Rollback completed."

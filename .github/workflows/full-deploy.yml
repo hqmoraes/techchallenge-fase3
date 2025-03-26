@@ -1,0 +1,63 @@
+name: Full Deployment Pipeline
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Infrastructure Deployment
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: Infrastructure Deployment
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Wait for infrastructure
+        run: sleep 300
+  
+  deploy-dynamodb:
+    needs: deploy-infrastructure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger DynamoDB Deployment
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: DynamoDB Tables Deployment
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Wait for DynamoDB
+        run: sleep 120
+  
+  deploy-auth-lambda:
+    needs: deploy-dynamodb
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Auth Lambda Deployment
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: Auth Lambda Deployment
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Wait for Lambda
+        run: sleep 60
+  
+  deploy-api:
+    needs: deploy-auth-lambda
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger API Deployment
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: API Deployment
+          token: ${{ secrets.GITHUB_TOKEN }}
+  
+  run-integration-tests:
+    needs: deploy-api
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Integration Tests
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: Integration Tests
+          token: ${{ secrets.GITHUB_TOKEN }}
